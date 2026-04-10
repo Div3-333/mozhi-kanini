@@ -53,7 +53,7 @@ export default function Home() {
   const [view, setView] = useState<"editor" | "library">("editor");
   const [activeTab, setActiveTab] = useState<"matrix" | "syntax">("matrix");
   const [theme, setTheme] = useState<"obsidian" | "paper" | "slate">("obsidian");
-  const [concordanceMatch, setConcordanceMatch] = useState<string | null>(null);
+  const [concordanceQuery, setConcordanceQuery] = useState<string | null>(null);
   
   const textRef = useRef<HTMLDivElement>(null);
 
@@ -254,20 +254,31 @@ export default function Home() {
     updateLexiconEntry(word, { morphemes: newMorphemes });
   };
 
+  const [concordanceQuery, setConcordanceQuery] = useState<string | null>(null);
+
   const findConcordance = (morphemeText: string) => {
-    setConcordanceMatch(null);
-    setTimeout(() => setConcordanceMatch(morphemeText), 10);
+    setConcordanceQuery(null);
+    const normalized = morphemeText.normalize("NFC");
+    setTimeout(() => setConcordanceQuery(normalized), 10);
   };
 
   const renderHighlightedText = () => {
-    if (!concordanceMatch) return inputText;
-    const escaped = concordanceMatch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`(${escaped})`, 'gi');
-    return inputText.split(regex).map((part, i) => 
-        part.toLowerCase() === concordanceMatch.toLowerCase() 
-        ? <span key={i} className="bg-yellow-500/40 text-white rounded px-0.5 border-b-2 border-yellow-400 animate-pulse">{part}</span> 
-        : part
-    );
+    if (!concordanceQuery) return inputText;
+    const tokens = inputText.split(/(\s+|[.,!?;:।])/g);
+    return tokens.map((token, i) => {
+        const cleanToken = token.trim().replace(/[.,!?;:।]/g, "").normalize("NFC");
+        if (!cleanToken) return token;
+
+        const entry = lexicon[token.trim()] || lexicon[cleanToken];
+        const isMatch = entry && entry.morphemes.some(m => 
+            m.text.normalize("NFC") === concordanceQuery
+        );
+
+        if (isMatch) {
+            return <span key={i} className="bg-indigo-500/40 text-white rounded px-0.5 border-b-2 border-indigo-400 animate-pulse">{token}</span>;
+        }
+        return token;
+    });
   };
 
   // --- Export Logic ---
@@ -354,9 +365,9 @@ export default function Home() {
               </div>
             </div>
             <div className="flex-1 overflow-y-auto p-6 custom-scrollbar relative">
-              {concordanceMatch && (<div className="absolute top-2 right-2 z-10"><button onClick={() => setConcordanceMatch(null)} className="text-[8px] bg-red-500/20 text-red-400 px-2 py-1 rounded border border-red-500/20 font-bold uppercase tracking-widest">Clear</button></div>)}
+              {concordanceQuery && (<div className="absolute top-2 right-2 z-10"><button onClick={() => setConcordanceQuery(null)} className="text-[8px] bg-red-500/20 text-red-400 px-2 py-1 rounded border border-red-500/20 font-bold uppercase tracking-widest">Clear</button></div>)}
               <div ref={textRef} contentEditable suppressContentEditableWarning onMouseUp={handleSelection} className={`outline-none text-lg leading-relaxed font-medium min-h-full whitespace-pre-wrap ${theme === 'paper' ? 'text-slate-800' : 'text-white/70'}`} onInput={(e) => { setInputText(e.currentTarget.innerText); saveCurrentDoc({ content: e.currentTarget.innerText }); }}>
-                {concordanceMatch ? renderHighlightedText() : inputText}
+                {concordanceQuery ? renderHighlightedText() : inputText}
               </div>
             </div>
           </div>
