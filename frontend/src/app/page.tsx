@@ -214,7 +214,11 @@ export default function Home() {
         body: JSON.stringify({ text: analysis.text, language, context: inputText }),
       });
       const data = await response.json();
-      setAnalysis(prev => prev ? { ...prev, translation: data.translation } : null);
+      setAnalysis(prev => prev ? { 
+        ...prev, 
+        translation: data.translation,
+        breakdown: data.breakdown && data.breakdown.length > 0 ? data.breakdown : prev.breakdown 
+      } : null);
     } catch (error) {
       console.error("Deep translation failed", error);
     } finally {
@@ -253,8 +257,6 @@ export default function Home() {
     newMorphemes[mIndex] = { ...newMorphemes[mIndex], [field]: value };
     updateLexiconEntry(word, { morphemes: newMorphemes });
   };
-
-  const [concordanceQuery, setConcordanceQuery] = useState<string | null>(null);
 
   const findConcordance = (morphemeText: string) => {
     setConcordanceQuery(null);
@@ -390,7 +392,13 @@ export default function Home() {
                         <div className={`font-serif tracking-tight leading-snug mb-4 transition-all ${isHeaderExpanded ? 'text-2xl' : 'text-lg line-clamp-1 opacity-60'} ${theme === 'paper' ? 'text-slate-800' : 'text-white'}`}>{analysis.text}</div>
                         <div className="flex items-center gap-4">
                           <div className="flex-1 bg-indigo-500/5 border border-indigo-500/20 px-4 py-2.5 rounded-xl flex items-center gap-3 min-w-0"><span className="text-[8px] font-mono text-indigo-500 font-bold uppercase">Semantic</span><p className={`text-indigo-100 font-light italic truncate flex-1 ${isHeaderExpanded ? 'whitespace-normal' : 'truncate'}`}>"{analysis.translation}"</p></div>
-                          <div className="flex gap-2"><button onClick={exportToLeipzigMarkdown} className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-[8px] font-bold text-slate-400 hover:text-white uppercase tracking-widest">MD</button><button onClick={exportToLaTeX} className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-[8px] font-bold text-slate-400 hover:text-white uppercase tracking-widest">LaTeX</button></div>
+                          <div className="flex gap-2">
+                            <button onClick={fetchDeepTranslation} disabled={deepLoading} className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-[8px] font-bold text-white uppercase tracking-widest disabled:opacity-50">
+                              {deepLoading ? "..." : "Deep"}
+                            </button>
+                            <button onClick={exportToLeipzigMarkdown} className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-[8px] font-bold text-slate-400 hover:text-white uppercase tracking-widest">MD</button>
+                            <button onClick={exportToLaTeX} className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-[8px] font-bold text-slate-400 hover:text-white uppercase tracking-widest">LaTeX</button>
+                          </div>
                         </div>
                       </div>
                     </div>

@@ -227,13 +227,44 @@ async def process_document(request: AnalysisRequest):
 
 @app.post("/analyze", response_model=AnalysisResponse)
 async def analyze_text(request: AnalysisRequest):
-    try:
-        lang_map = {'tamil': 'ta', 'malayalam': 'ml', 'hindi': 'hi', 'kannada': 'kn', 'telugu': 'te', 'sanskrit': 'sa'}
-        src_lang = lang_map.get(request.language.lower(), 'auto')
-        result = await translator.translate(request.text, src=src_lang, dest='en')
-        return {"translation": result.text, "breakdown": []}
-    except:
-        return {"translation": "Translation error", "breakdown": []}
+    if not GENI_API_KEY or GENI_API_KEY == "your_gemini_api_key_here":
+        raise HTTPException(status_code=500, detail="API key missing.")
+    
+    prompt = f"""
+    Act as a linguistic expert in {request.language}. 
+    Provide a deep morphological breakdown for the following text: "{request.text}"
+    Full Context (Sentence): "{request.context}"
+    
+    Return STRICT JSON following this structure:
+    {{
+      "translation": "English translation of the full selection",
+      "breakdown": [
+        {{
+          "word": "original word",
+          "transliteration": "ISO-15919 or similar scientific transliteration",
+          "contextual_meaning": "meaning of this word in this specific context",
+          "pos": "Part of speech (Noun, Verb, etc.)",
+          "syntax_relation": "Grammatical role (Subject, Object, etc.)",
+          "morphemes": [
+            {{ "text": "morpheme", "type": "root/suffix/prefix", "meaning": "morpheme meaning", "pos": "morpheme-specific POS if applicable" }}
+          ]
+        }}
+      ]
+    }}
+    """
+    
+    models = get_filtered_models()
+    for model_name in models:
+        try:
+            model = genai.GenerativeModel(model_name, generation_config={"response_mime_type": "application/json"})
+            response = await asyncio.to_thread(model.generate_content, prompt)
+            data = json.loads(response.text)
+            return AnalysisResponse(**data)
+        except Exception as e:
+            print(f"INFO: Analysis failed with {model_name}: {e}")
+            continue
+            
+    raise HTTPException(status_code=500, detail="Linguistic analysis failed across all models.")
 
 if __name__ == "__main__":
     import uvicorn
