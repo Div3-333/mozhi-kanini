@@ -29,10 +29,23 @@ class Document(Base):
     content = Column(Text)
     language = Column(String)
     doc_translation = Column(Text)
-    lexicon_json = Column(JSON) # Stores the analyzed word breakdowns
+    lexicon_json = Column(JSON)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     project = relationship("Project", back_populates="documents")
+    interpretations = relationship("Interpretation", back_populates="document", cascade="all, delete-orphan")
+
+class Interpretation(Base):
+    __tablename__ = "interpretations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id"))
+    name = Column(String) # e.g. "AI Baseline", "Scholarly Interpretation A"
+    doc_translation = Column(Text)
+    lexicon_json = Column(JSON)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    document = relationship("Document", back_populates="interpretations")
 
 def init_db():
     Base.metadata.create_all(bind=engine)

@@ -46,6 +46,21 @@ class ProjectSchema(ProjectBase):
     class Config:
         from_attributes = True
 
+class InterpretationBase(BaseModel):
+    name: str
+    doc_translation: str
+    lexicon_json: Dict[str, Any]
+
+class InterpretationCreate(InterpretationBase):
+    document_id: int
+
+class InterpretationSchema(InterpretationBase):
+    id: int
+    document_id: int
+    created_at: Any
+    class Config:
+        from_attributes = True
+
 class DocumentBase(BaseModel):
     title: str
     content: str
@@ -60,6 +75,7 @@ class DocumentSchema(DocumentBase):
     id: int
     project_id: int
     created_at: Any
+    interpretations: List[InterpretationSchema] = []
     class Config:
         from_attributes = True
 
@@ -117,6 +133,13 @@ def create_project(project: ProjectCreate, db: Session = Depends(get_db)):
 def list_documents(project_id: int, db: Session = Depends(get_db)):
     return db.query(db_module.Document).filter(db_module.Document.project_id == project_id).all()
 
+@app.get("/projects/{project_id}/export")
+def export_project(project_id: int, db: Session = Depends(get_db)):
+    project = db.query(db_module.Project).filter(db_module.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
 @app.post("/documents", response_model=DocumentSchema)
 def create_document(doc: DocumentCreate, db: Session = Depends(get_db)):
     db_doc = db_module.Document(**doc.dict())
@@ -135,6 +158,59 @@ def update_document(doc_id: int, doc_update: Dict[str, Any], db: Session = Depen
     db.commit()
     db.refresh(db_doc)
     return db_doc
+
+@app.post("/interpretations", response_model=InterpretationSchema)
+def create_interpretation(interp: InterpretationCreate, db: Session = Depends(get_db)):
+    db_interp = db_module.Interpretation(**interp.dict())
+    db.add(db_interp)
+    db.commit()
+    db.refresh(db_interp)
+    return db_interp
+
+@app.get("/interpretations/{interp_id}/statistics")
+def get_statistics(interp_id: int, db: Session = Depends(get_db)):
+    interp = db.query(db_module.Interpretation).filter(db_module.Interpretation.id == interp_id).first()
+    if not interp:
+        # Fallback to document stats if no interpretation is found (some old logic might use this)
+        doc = db.query(db_module.Document).filter(db_module.Document.id == interp_id).first()
+        if not doc:
+            raise HTTPException(status_code=404, detail="Stats target not found")
+        lexicon = doc.lexicon_json or {}
+    else:
+        lexicon = interp.lexicon_json or {}
+        
+    total_unique_tokens = len(lexicon)
+    pos_distribution = {}
+    morpheme_type_distribution = {}
+    
+    for word, data in lexicon.items():
+        if isinstance(data, dict):
+            pos = data.get("pos", "Unknown")
+            pos_distribution[pos] = pos_distribution.get(pos, 0) + 1
+            for m in data.get("morphemes", []):
+                mtype = m.get("type", "Unknown")
+                morpheme_type_distribution[mtype] = morpheme_type_distribution.get(mtype, 0) + 1
+            
+    return {
+        "total_unique_tokens": total_unique_tokens,
+        "pos_distribution": pos_distribution,
+        "morpheme_type_distribution": morpheme_type_distribution
+    }
+
+@app.post("/detect_language")
+async def detect_language(request: Dict[str, str]):
+    text = request.get("text", "")
+    try:
+        result = await translator.detect(text)
+        return {"language": result.lang}
+    except:
+        return {"language": "sanskrit"}
+
+@app.post("/transliterate")
+async def transliterate_text(request: Dict[str, str]):
+    text = request.get("text", "")
+    # Placeholder: real transliteration would use a library like indic-transliteration
+    return {"transliterated_text": text}
 
 # --- Existing Analysis Logic ---
 

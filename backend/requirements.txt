@@ -3,3 +3,5 @@ uvicorn
 google-generativeai
 python-dotenv
 pydantic
+googletrans==4.0.0-rc1
+sqlalchemy
